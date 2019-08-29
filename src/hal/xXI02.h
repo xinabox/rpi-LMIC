@@ -52,6 +52,20 @@
 #define SC18IS601_GPIO_MODE_INPUT_ONLY 0x02
 #define SC18IS601_GPIO_MODE_OPEN_DRAIN  0x03
 
+#ifndef OUTPUT
+#define OUTPUT 1
+#endif
+#ifndef INPUT
+#define INPUT 0
+#endif
+#ifndef HIGH
+#define HIGH 1
+#endif
+#ifndef LOW
+#define LOW 0
+#endif
+#define LSBFIRST 0
+#define MSBFIRST 1
 
 class xXI02 {
   public:
