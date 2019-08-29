@@ -17,7 +17,9 @@
 #include "../lmic.h"
 #include "hal.h"
 #include <stdio.h>
+#inlcude "xXI02.h"
 
+xXI02 spi;
 
 
 // -----------------------------------------------------------------------------
@@ -34,11 +36,11 @@ static void hal_io_init () {
     //ASSERT(lmic_pins.dio[0] != LMIC_UNUSED_PIN);
     //ASSERT(lmic_pins.dio[1] != LMIC_UNUSED_PIN || lmic_pins.dio[2] != LMIC_UNUSED_PIN);
 
-    pinMode(lmic_pins.nss, OUTPUT);
+    //pinMode(lmic_pins.nss, OUTPUT);
     if (lmic_pins.rxtx != LMIC_UNUSED_PIN)
         pinMode(lmic_pins.rxtx, OUTPUT);
     if (lmic_pins.rst != LMIC_UNUSED_PIN)
-        pinMode(lmic_pins.rst, OUTPUT);
+        spi.pinMode(lmic_pins.rst, OUTPUT);
 
     // if using DIO lines, DIO0 is always required, DIO1 is required for LoRa, DIO2 for FSK
     for (uint8_t i = 0; i < NUM_DIO; ++i) {
@@ -46,11 +48,11 @@ static void hal_io_init () {
             check_dio = 1; // we need to use DIO line check
             pinMode(lmic_pins.dio[i], INPUT);
             
-#ifdef RASPBERRY_PI
-            // Enable pull down an rising edge detection on this one
-            bcm2835_gpio_set_pud(lmic_pins.dio[i], BCM2835_GPIO_PUD_DOWN);
-            bcm2835_gpio_ren(lmic_pins.dio[i]);
-#endif
+// #ifdef RASPBERRY_PI
+//             // Enable pull down an rising edge detection on this one
+//             bcm2835_gpio_set_pud(lmic_pins.dio[i], BCM2835_GPIO_PUD_DOWN);
+//             bcm2835_gpio_ren(lmic_pins.dio[i]);
+// #endif
 
         }
     }
@@ -68,10 +70,10 @@ void hal_pin_rst (u1_t val) {
         return;
 
     if(val == 0 || val == 1) { // drive pin
-        pinMode(lmic_pins.rst, OUTPUT);
-        digitalWrite(lmic_pins.rst, val);
+        spi.pinMode(lmic_pins.rst, OUTPUT);
+        spi.digitalWrite(lmic_pins.rst, val);
     } else { // keep pin floating
-        pinMode(lmic_pins.rst, INPUT);
+        spi.pinMode(lmic_pins.rst, INPUT);
     }
 }
 
@@ -83,16 +85,16 @@ static void hal_io_check() {
         uint8_t i;
         for (i = 0; i < NUM_DIO; ++i) {
           
-#ifdef RASPBERRY_PI
-            // Rising edge fired ?
-            if (bcm2835_gpio_eds(lmic_pins.dio[i])) {
-                // Now clear the eds flag by setting it to 1
-                bcm2835_gpio_set_eds(lmic_pins.dio[i]);
-                // Handle pseudo interrupt
-                radio_irq_handler(i);
-            }
-#else
-            if (dio_states[i] != digitalRead(lmic_pins.dio[i])) {
+// #ifdef RASPBERRY_PI
+//             // Rising edge fired ?
+//             if (bcm2835_gpio_eds(lmic_pins.dio[i])) {
+//                 // Now clear the eds flag by setting it to 1
+//                 bcm2835_gpio_set_eds(lmic_pins.dio[i]);
+//                 // Handle pseudo interrupt
+//                 radio_irq_handler(i);
+//             }
+// #else
+            if (dio_states[i] != spi.digitalRead(lmic_pins.dio[i])) {
                 dio_states[i] = !dio_states[i];
                 if (dio_states[i]) {
                     radio_irq_handler(i);
@@ -111,30 +113,34 @@ static void hal_io_check() {
 // SPI
 
 static void hal_spi_init () {
-    SPI.begin();
+    spi.begin(3);
+    spi.pinMode(lmic_pins.nss, OUTPUT);
+    spi.pinMode(lmic_pins.rst, OUTPUT);
+    spi.digitalWrite(lmic_pins.rst, HIGH);
 }
 
-#ifdef RASPBERRY_PI
-    // Clock divider / 32 = 8MHz
-    static const SPISettings settings(BCM2835_SPI_CLOCK_DIVIDER_32 , BCM2835_SPI_BIT_ORDER_MSBFIRST, BCM2835_SPI_MODE0);
-#else
-    static const SPISettings settings(10E6, MSBFIRST, SPI_MODE0);
-#endif
+// #ifdef RASPBERRY_PI
+//     // Clock divider / 32 = 8MHz
+//     static const SPISettings settings(BCM2835_SPI_CLOCK_DIVIDER_32 , BCM2835_SPI_BIT_ORDER_MSBFIRST, BCM2835_SPI_MODE0);
+// #else
+//     static const SPISettings settings(10E6, MSBFIRST, SPI_MODE0);
+// #endif
 
 void hal_pin_nss (u1_t val) {
-    if (!val)
-        SPI.beginTransaction(settings);
-    else
-        SPI.endTransaction();
+    spi.digitalWrite(lmic_pins.nss,val);
+//     if (!val)
+//         SPI.beginTransaction(settings);
+//     else
+//         SPI.endTransaction();
 
-    //Serial.println(val?">>":"<<");
-    digitalWrite(lmic_pins.nss, val);
+//     //Serial.println(val?">>":"<<");
+//     digitalWrite(lmic_pins.nss, val);
 }
 
 
 // perform SPI transaction with radio
 u1_t hal_spi (u1_t out) {
-    u1_t res = SPI.transfer(out);
+    u1_t res = spi.transfer(out);
 /*
     Serial.print(">");
     Serial.print(out, HEX);
@@ -270,10 +276,11 @@ void hal_printf_init() {
 #endif // defined(LMIC_PRINTF_TO)
 
 void hal_init () {
-    // configure radio I/O and interrupt handler
-    hal_io_init();
     // configure radio SPI
     hal_spi_init();
+    // configure radio I/O and interrupt handler
+    hal_io_init();
+
     // configure timer and interrupt handler
     hal_time_init();
 #if defined(LMIC_PRINTF_TO)
